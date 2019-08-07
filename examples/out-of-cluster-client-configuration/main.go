@@ -28,6 +28,7 @@ import (
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/client-go/tools/clientcmd"
 
+	"istio.io/api/networking/v1alpha3"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/apimachinery/pkg/util/strategicpatch"
@@ -82,8 +83,9 @@ func main() {
 		AddFunc: func(obj interface{}) {
 			fmt.Println("CRD DestinationRule ADD")
 			drus := obj.(*unstructured.Unstructured)
+			dr := CovertToDestinationRules(drus)
 			fmt.Printf("\t Name: %s\n", drus.GetName())
-			fmt.Printf("\t Host: %s\n", drus.Object["spec"])
+			fmt.Printf("\t Host: %s, Subsets: %s\n", dr.Host, dr.Subsets)
 
 		},
 		UpdateFunc: func(old, cur interface{}) {
@@ -100,7 +102,7 @@ func main() {
 				}{})
 				fmt.Printf("CRD NEG Annotation updated, diff: %s\n", string(patchBytes))
 
-				_, err := dynamicClient.Resource(destrinationGVR).Namespace(newDSus.GetNamespace()).Patch(newDSus.GetName(), types.StrategicMergePatchType, patchBytes, metav1.PatchOptions{})
+				_, err := dynamicClient.Resource(destrinationGVR).Namespace(newDSus.GetNamespace()).Patch(newDSus.GetName(), types.MergePatchType, patchBytes, metav1.PatchOptions{})
 				if err != nil {
 					fmt.Println("CRD Patch error: %s \n", err)
 				}
@@ -116,6 +118,21 @@ func homeDir() string {
 		return h
 	}
 	return os.Getenv("USERPROFILE") // windows
+}
+
+func CovertToDestinationRules(drus *unstructured.Unstructured) v1alpha3.DestinationRule {
+	drJson, err := json.Marshal(drus.Object["spec"])
+	//drJson, err := drus.MarshalJSON()
+	if err != nil {
+		fmt.Println("Marshal error: ", err)
+	}
+
+	fmt.Println("Json: ", string(drJson))
+	dr := v1alpha3.DestinationRule{}
+	if err := json.Unmarshal(drJson, &dr); err != nil {
+		fmt.Println("Unmarshal error: ", err)
+	}
+	return dr
 }
 
 func StrategicMergePatchBytes(old, cur, refStruct interface{}) ([]byte, error) {
