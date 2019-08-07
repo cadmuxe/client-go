@@ -25,6 +25,7 @@ import (
 	"path/filepath"
 
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
+	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/client-go/tools/clientcmd"
 
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -94,12 +95,14 @@ func main() {
 				annotations["neg-status"] = "Hiiiiiiii"
 				newDSus.SetAnnotations(annotations)
 
-				patchBytes, _ := StrategicMergePatchBytes(drus, newDSus, unstructured.Unstructured{})
+				patchBytes, _ := StrategicMergePatchBytes(drus, newDSus, struct {
+					metav1.ObjectMeta `json:"metadata,omitempty" protobuf:"bytes,1,opt,name=metadata"`
+				}{})
 				fmt.Printf("CRD NEG Annotation updated, diff: %s\n", string(patchBytes))
-				//dynamicClient.Resource(destrinationGVR).Patch(newDSus.GetName(), types.StrategicMergePatchType, patchBytes, metav1.PatchOptions{})
-				_, err := dynamicClient.Resource(destrinationGVR).Namespace(newDSus.GetNamespace()).Update(newDSus, metav1.UpdateOptions{})
+
+				_, err := dynamicClient.Resource(destrinationGVR).Namespace(newDSus.GetNamespace()).Patch(newDSus.GetName(), types.StrategicMergePatchType, patchBytes, metav1.PatchOptions{})
 				if err != nil {
-					fmt.Printf("Update error: %s\n", err)
+					fmt.Println("CRD Patch error: %s \n", err)
 				}
 			}
 		},
